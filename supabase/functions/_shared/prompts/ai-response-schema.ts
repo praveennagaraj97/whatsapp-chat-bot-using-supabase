@@ -1,0 +1,86 @@
+// JSON response schema for Gemini structured output
+export const AI_RESPONSE_SCHEMA = {
+  type: "OBJECT",
+  properties: {
+    extractedData: {
+      type: "OBJECT",
+      properties: {
+        symptoms: { type: "STRING", nullable: true },
+        specialization: { type: "STRING", nullable: true },
+        doctorId: { type: "STRING", nullable: true },
+        doctorName: { type: "STRING", nullable: true },
+        clinicId: { type: "STRING", nullable: true },
+        clinicName: { type: "STRING", nullable: true },
+        preferredDate: { type: "STRING", nullable: true },
+        preferredTime: { type: "STRING", nullable: true },
+        medicineIds: {
+          type: "ARRAY",
+          items: { type: "STRING" },
+          nullable: true,
+        },
+        medicineNames: {
+          type: "ARRAY",
+          items: { type: "STRING" },
+          nullable: true,
+        },
+        userName: { type: "STRING", nullable: true },
+      },
+      required: [
+        "symptoms",
+        "specialization",
+        "doctorId",
+        "doctorName",
+        "clinicId",
+        "clinicName",
+        "preferredDate",
+        "preferredTime",
+        "medicineIds",
+        "medicineNames",
+        "userName",
+      ],
+    },
+    message: { type: "STRING" },
+    nextAction: {
+      type: "STRING",
+      nullable: true,
+      enum: [
+        "show_doctors",
+        "show_medicines",
+        "book_doctor",
+        "confirm_appointment",
+        "order_medicine",
+        "confirm_order",
+        "faq",
+        "none",
+      ],
+    },
+    status: {
+      type: "OBJECT",
+      properties: {
+        outcome: {
+          type: "STRING",
+          enum: ["SUCCESS", "PARTIAL_SUCCESS", "FAILED", "AMBIGUOUS"],
+        },
+        reason: { type: "STRING", nullable: true },
+        field: { type: "STRING", nullable: true },
+      },
+      required: ["outcome"],
+    },
+    options: {
+      type: "ARRAY",
+      items: { type: "STRING" },
+      nullable: true,
+    },
+    conversationSummary: { type: "STRING", nullable: true },
+    callFAQs: { type: "BOOLEAN" },
+  },
+  required: [
+    "extractedData",
+    "message",
+    "nextAction",
+    "status",
+    "options",
+    "conversationSummary",
+    "callFAQs",
+  ],
+};
