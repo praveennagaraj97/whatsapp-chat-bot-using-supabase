@@ -1,4 +1,4 @@
-.PHONY: help install seed seed-doctors seed-clinics seed-medicines seed-faqs deploy serve secrets
+.PHONY: help install seed seed-doctors seed-clinics seed-medicines seed-faqs deploy serve secrets deploy-webhook
 
 # Default Supabase project ref (override with SUPABASE_PROJECT_REF=xxx)
 SUPABASE_PROJECT_REF ?= qfuovdkaygjlwqqcqmxm
@@ -39,5 +39,5 @@ deploy-webhook: ## Deploy webhook edge function to Supabase
 	fi; \
 	SUPABASE_ACCESS_TOKEN="$$SUPABASE_ACCESS_TOKEN" npx supabase functions deploy webhook --project-ref $(SUPABASE_PROJECT_REF) --no-verify-jwt
 
-deploy: deploy-webhook ## Deploy all edge functions
+deploy: secrets deploy-webhook ## Push secrets and deploy all edge functions
 	@echo "Webhook function deployed!"

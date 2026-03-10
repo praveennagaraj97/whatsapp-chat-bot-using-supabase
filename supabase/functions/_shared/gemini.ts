@@ -19,57 +19,96 @@ import { buildUserPrompt } from "./prompts/user-prompt.ts";
 import type { AIPromptResponse, UserSession } from "./types.ts";
 import { fetchAudioAsBase64 } from "./whatsapp.ts";
 
-function getApiKeys(): string[] {
-  const csv = Deno.env.get("GEMINI_API_KEYS") || "";
-  const keys = csv
+type GeminiKeyLabel = "Primary Key" | "Fallback One" | "Fallback Two";
+
+type GeminiApiKeyEntry = {
+  label: GeminiKeyLabel;
+  key: string;
+};
+
+function getEnv(name: string): string {
+  return (Deno.env.get(name) || "").trim();
+}
+
+function loadApiKeyEntries(): GeminiApiKeyEntry[] {
+  const primary = getEnv("GEMINI_PRIMARY_KEY") || getEnv("GEMINI_API_KEY");
+  const fallbackOne = getEnv("GEMINI_FALLBACK_ONE");
+  const fallbackTwo = getEnv("GEMINI_FALLBACK_TWO");
+
+  const explicitEntries: GeminiApiKeyEntry[] = [
+    { label: "Primary Key" as const, key: primary },
+    { label: "Fallback One" as const, key: fallbackOne },
+    { label: "Fallback Two" as const, key: fallbackTwo },
+  ].filter((entry) => Boolean(entry.key));
+
+  if (explicitEntries.length > 0) {
+    return explicitEntries;
+  }
+
+  // Backward compatibility for old CSV key config.
+  const csv = getEnv("GEMINI_API_KEYS")
     .split(",")
     .map((k) => k.trim())
     .filter(Boolean);
 
-  if (keys.length > 0) {
-    return keys;
-  }
-
-  const singleKey = Deno.env.get("GEMINI_API_KEY") || "";
-  return singleKey ? [singleKey] : [];
+  return [
+    { label: "Primary Key" as const, key: csv[0] || "" },
+    { label: "Fallback One" as const, key: csv[1] || "" },
+    { label: "Fallback Two" as const, key: csv[2] || "" },
+  ].filter((entry) => Boolean(entry.key));
 }
 
 function getModelName(): string {
   return Deno.env.get("GEMINI_MODEL") || "gemini-2.5-flash";
 }
 
-const apiKeys = getApiKeys();
+const apiKeyEntries = loadApiKeyEntries();
 let currentKeyIndex = 0;
 let genAIClient: GoogleGenAI | null = null;
 
+if (apiKeyEntries.length > 0) {
+  const labels = apiKeyEntries.map((entry, index) => `${entry.label}(${index})`).join(", ");
+  console.info(`[Gemini] Loaded ${apiKeyEntries.length} API key(s): ${labels}`);
+} else {
+  console.error("[Gemini] Loaded 0 API keys. Rotation is disabled.");
+}
+
+function getCurrentKeyEntry(): GeminiApiKeyEntry {
+  return apiKeyEntries[currentKeyIndex];
+}
+
 function getCurrentClient(): GoogleGenAI {
-  if (apiKeys.length === 0) {
-    throw new Error("Missing Gemini API key. Set GEMINI_API_KEY or GEMINI_API_KEYS");
+  if (apiKeyEntries.length === 0) {
+    throw new Error(
+      "Missing Gemini API key. Set GEMINI_PRIMARY_KEY (optional: GEMINI_FALLBACK_ONE, GEMINI_FALLBACK_TWO) or GEMINI_API_KEYS",
+    );
   }
 
   if (!genAIClient) {
-    genAIClient = new GoogleGenAI({ apiKey: apiKeys[currentKeyIndex] });
+    genAIClient = new GoogleGenAI({ apiKey: getCurrentKeyEntry().key });
   }
 
   return genAIClient;
 }
 
 function rotateApiKey(startingIndex: number, failureReason?: string): boolean {
-  if (apiKeys.length <= 1) return false;
+  if (apiKeyEntries.length <= 1) return false;
 
   const previousIndex = currentKeyIndex;
-  currentKeyIndex = (currentKeyIndex + 1) % apiKeys.length;
+  currentKeyIndex = (currentKeyIndex + 1) % apiKeyEntries.length;
 
   if (currentKeyIndex === startingIndex && previousIndex !== startingIndex) {
     return false;
   }
 
+  const failedEntry = apiKeyEntries[previousIndex];
+  const nextEntry = apiKeyEntries[currentKeyIndex];
   const reason = failureReason ? ` Reason: ${failureReason}` : "";
   console.error(
-    `Gemini API key ${previousIndex + 1} failed.${reason} Rotating to key ${currentKeyIndex + 1}.`,
+    `[Gemini] ${failedEntry.label} (index ${previousIndex}) failed.${reason} Rotating to ${nextEntry.label} (index ${currentKeyIndex}).`,
   );
 
-  genAIClient = new GoogleGenAI({ apiKey: apiKeys[currentKeyIndex] });
+  genAIClient = new GoogleGenAI({ apiKey: nextEntry.key });
   return true;
 }
 
@@ -80,6 +119,7 @@ function isApiKeyError(error: unknown): boolean {
   const message = String(err.message || "").toLowerCase();
   const code = String(err.code || "").toLowerCase();
   const status = String(err.status || "").toLowerCase();
+  const details = JSON.stringify(err).toLowerCase();
   const statusCode = Number(
     err.statusCode ||
       (typeof err.response === "object" && err.response
@@ -103,10 +143,16 @@ function isApiKeyError(error: unknown): boolean {
     "overloaded",
     "unavailable",
     "resource exhausted",
+    "retrydelay",
+    "generativelanguage.googleapis.com/generate_content",
+    "exceeded your current quota",
   ];
 
   return indicators.some((indicator) =>
-    message.includes(indicator) || code.includes(indicator) || status.includes(indicator)
+    message.includes(indicator) ||
+    code.includes(indicator) ||
+    status.includes(indicator) ||
+    details.includes(indicator)
   ) || [401, 403, 429, 503].includes(statusCode);
 }
 
@@ -120,7 +166,7 @@ async function callGemini(
 ): Promise<string> {
   const model = getModelName();
   const initialKeyIndex = currentKeyIndex;
-  const maxAttempts = Math.max(apiKeys.length, 1);
+  const maxAttempts = Math.max(apiKeyEntries.length, 1);
   let attempts = 0;
   let lastError: unknown;
 
@@ -148,9 +194,14 @@ async function callGemini(
     } catch (error) {
       lastError = error;
       attempts++;
+      const activeEntry = getCurrentKeyEntry();
+      const reason = error instanceof Error ? error.message : String(error);
+
+      console.error(
+        `[Gemini] Request failed on ${activeEntry.label} (index ${currentKeyIndex}), attempt ${attempts}/${maxAttempts}. Reason: ${reason}`,
+      );
 
       if (isApiKeyError(error) && attempts < maxAttempts) {
-        const reason = error instanceof Error ? error.message : String(error);
         if (rotateApiKey(initialKeyIndex, reason)) {
           continue;
         }
@@ -174,7 +225,7 @@ async function callGeminiWithAudio(
 ): Promise<string> {
   const model = getModelName();
   const initialKeyIndex = currentKeyIndex;
-  const maxAttempts = Math.max(apiKeys.length, 1);
+  const maxAttempts = Math.max(apiKeyEntries.length, 1);
   let attempts = 0;
   let lastError: unknown;
 
@@ -208,9 +259,14 @@ async function callGeminiWithAudio(
     } catch (error) {
       lastError = error;
       attempts++;
+      const activeEntry = getCurrentKeyEntry();
+      const reason = error instanceof Error ? error.message : String(error);
+
+      console.error(
+        `[Gemini][Audio] Request failed on ${activeEntry.label} (index ${currentKeyIndex}), attempt ${attempts}/${maxAttempts}. Reason: ${reason}`,
+      );
 
       if (isApiKeyError(error) && attempts < maxAttempts) {
-        const reason = error instanceof Error ? error.message : String(error);
         if (rotateApiKey(initialKeyIndex, reason)) {
           continue;
         }
