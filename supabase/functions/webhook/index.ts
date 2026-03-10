@@ -72,6 +72,7 @@ function applyExtractedData(
   data: AIPromptResponse["extractedData"],
 ): Partial<UserSession> {
   const update: Partial<UserSession> = {};
+  console.log("Session", session);
 
   if (data.symptoms) update.symptoms = data.symptoms;
   if (data.specialization) update.specialization = data.specialization;
