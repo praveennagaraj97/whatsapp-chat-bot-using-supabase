@@ -7,28 +7,28 @@ help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
 
 install: ## Install Node.js dependencies
-	npm install
+	yarn install
 
 seed: install ## Seed all CSV data into Supabase
-	npm run seed
+	yarn seed
 
 seed-doctors: install ## Seed only doctors table
-	npm run seed:doctors
+	yarn seed:doctors
 
 seed-clinics: install ## Seed only clinics table
-	npm run seed:clinics
+	yarn seed:clinics
 
 seed-medicines: install ## Seed only medicines table
-	npm run seed:medicines
+	yarn seed:medicines
 
 seed-faqs: install ## Seed only faqs table
-	npm run seed:faqs
+	yarn seed:faqs
 
 serve: ## Run webhook edge function locally with Deno
-	npm run serve
+	yarn serve
 
 secrets: ## Push secrets from .env to Supabase edge functions
-	npm run secrets
+	yarn secrets
 
 deploy-webhook: ## Deploy webhook edge function to Supabase
 	@# Ensure SUPABASE_ACCESS_TOKEN is available: prefer env, fallback to .env file
