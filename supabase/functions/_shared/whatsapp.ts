@@ -36,7 +36,7 @@ async function post(payload: Record<string, unknown>): Promise<boolean> {
   }
 }
 
-export async function sendText(to: string, text: string): Promise<boolean> {
+export function sendText(to: string, text: string): Promise<boolean> {
   return post({
     messaging_product: "whatsapp",
     to,
@@ -72,7 +72,7 @@ export async function sendTyping(messageId: string): Promise<boolean> {
   }
 }
 
-export async function sendInteractiveButtons(
+export function sendInteractiveButtons(
   to: string,
   bodyText: string,
   buttons: InteractiveReplyButton[],
@@ -100,7 +100,7 @@ export async function sendInteractiveButtons(
   });
 }
 
-export async function sendInteractiveList(
+export function sendInteractiveList(
   to: string,
   bodyText: string,
   buttonText: string,
