@@ -1,6 +1,6 @@
 // Session management service using Supabase
-import { getSupabaseClient } from './supabase-client.ts';
-import type { UserSession } from './types.ts';
+import { getSupabaseClient } from "./supabase-client.ts";
+import type { UserSession } from "./types.ts";
 
 /**
  * Get or create a session for the user
@@ -11,9 +11,9 @@ export async function getOrCreateSession(
   const supabase = getSupabaseClient();
 
   const { data, error } = await supabase
-    .from('user_sessions')
-    .select('*')
-    .eq('user_id', userId)
+    .from("user_sessions")
+    .select("*")
+    .eq("user_id", userId)
     .single();
 
   if (data && !error) {
@@ -23,20 +23,20 @@ export async function getOrCreateSession(
   // Create new session
   const newSession: Partial<UserSession> = {
     user_id: userId,
-    conversation_context: 'general',
+    conversation_context: "general",
     is_processing: false,
     is_intro_sent: false,
     pause_auto_replies: false,
   };
 
   const { data: created, error: createError } = await supabase
-    .from('user_sessions')
+    .from("user_sessions")
     .insert(newSession)
     .select()
     .single();
 
   if (createError) {
-    console.error('Failed to create session:', createError);
+    console.error("Failed to create session:", createError);
     throw new Error(`Session creation failed: ${createError.message}`);
   }
 
@@ -53,12 +53,12 @@ export async function updateSession(
   const supabase = getSupabaseClient();
 
   const { error } = await supabase
-    .from('user_sessions')
+    .from("user_sessions")
     .update(data)
-    .eq('user_id', userId);
+    .eq("user_id", userId);
 
   if (error) {
-    console.error('Failed to update session:', error);
+    console.error("Failed to update session:", error);
   }
 }
 
@@ -67,7 +67,11 @@ export async function updateSession(
  */
 export async function deleteSession(userId: string): Promise<void> {
   const supabase = getSupabaseClient();
-  await supabase.from('user_sessions').delete().eq('user_id', userId);
+  await supabase.from("user_sessions").delete().eq("user_id", userId);
+  await supabase.from("appointments").delete().eq("user_id", userId);
+  await supabase.from("chat_messages").delete().eq("user_id", userId);
+  await supabase.from("medicine_orders").delete().eq("user_id", userId);
+  await supabase.from("queued_messages").delete().eq("user_id", userId);
 }
 
 /**
@@ -78,20 +82,20 @@ export async function startNewSession(
 ): Promise<UserSession> {
   const supabase = getSupabaseClient();
 
-  await supabase.from('user_sessions').delete().eq('user_id', session.user_id);
+  await supabase.from("user_sessions").delete().eq("user_id", session.user_id);
 
   const newSession: Partial<UserSession> = {
     user_id: session.user_id,
     user_name: session.user_name,
     user_phone: session.user_phone,
-    conversation_context: 'general',
+    conversation_context: "general",
     is_processing: false,
     is_intro_sent: true,
     pause_auto_replies: session.pause_auto_replies,
   };
 
   const { data, error } = await supabase
-    .from('user_sessions')
+    .from("user_sessions")
     .insert(newSession)
     .select()
     .single();

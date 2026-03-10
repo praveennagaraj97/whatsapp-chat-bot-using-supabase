@@ -2,6 +2,7 @@
   "version": "5",
   "specifiers": {
     "npm:@google/genai@*": "1.44.0",
+    "npm:@google/genai@latest": "1.44.0",
     "npm:@supabase/supabase-js@^2.49.0": "2.99.0",
     "npm:csv-parse@^5.6.0": "5.6.0",
     "npm:dotenv@^16.4.7": "16.6.1"

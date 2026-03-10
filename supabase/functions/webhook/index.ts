@@ -14,7 +14,7 @@ import {
   MAX_QUEUE_TURNS,
   PROCESSING_TIMEOUT_MS,
 } from "../_shared/constants.ts";
-import { extractValidWhatsappMessage } from "../_shared/extract-message.ts";
+import { extractValidWhatsappMessages } from "../_shared/extract-message.ts";
 import { processUserMessage, rephraseFAQ, translateAudioToEnglish } from "../_shared/gemini.ts";
 import { getAndClearInactivityMessage, setInactivityMessage } from "../_shared/inactivity.ts";
 import { getDoctors, getMedicines } from "../_shared/knowledge-base.ts";
@@ -602,11 +602,13 @@ Deno.serve({ port }, async (req: Request): Promise<Response> => {
   if (req.method === "POST") {
     try {
       const body: WhatsAppWebhookPayload = await req.json();
-      const message = extractValidWhatsappMessage(body);
+      const incomingMessages = extractValidWhatsappMessages(body);
 
-      if (!message) {
+      if (incomingMessages.length === 0) {
         return new Response(null, { status: 204 });
       }
+
+      const [message, ...extraMessages] = incomingMessages;
 
       // Send typing indicator
       if (message.id) {
@@ -627,6 +629,14 @@ Deno.serve({ port }, async (req: Request): Promise<Response> => {
       }
 
       const { session, isNew } = await getOrCreateSession(message.from);
+
+      // If webhook contains multiple user messages, enqueue extras now so the
+      // processing loop can consume them in order after the first turn.
+      if (extraMessages.length > 0) {
+        for (const extraMessage of extraMessages) {
+          await enqueueMessage(message.from, extraMessage);
+        }
+      }
 
       // Seed user_name from WhatsApp profile if not yet set
       if (message.profileName && !session.user_name) {
