@@ -573,7 +573,9 @@ async function handleMessage(
 }
 
 // ─── Main Deno.serve handler ───
-Deno.serve(async (req: Request): Promise<Response> => {
+const port = Number(Deno.env.get("PORT") || "8000");
+
+Deno.serve({ port }, async (req: Request): Promise<Response> => {
   // CORS preflight
   if (req.method === "OPTIONS") {
     return corsResponse();

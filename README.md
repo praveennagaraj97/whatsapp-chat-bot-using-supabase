@@ -33,10 +33,9 @@ By default the example handles medical workflows (symptom discussion, doctor boo
 
 ### Edge Functions
 
-| Function        | Purpose                                                                      | JWT                        |
-| --------------- | ---------------------------------------------------------------------------- | -------------------------- |
-| `webhook`       | Main WhatsApp message handler (GET for Meta verification, POST for messages) | Disabled (public endpoint) |
-| `process-queue` | Cron/manual cleanup — processes stuck sessions and orphaned queued messages  | Disabled                   |
+| Function  | Purpose                                                                      | JWT                        |
+| --------- | ---------------------------------------------------------------------------- | -------------------------- |
+| `webhook` | Main WhatsApp message handler (GET for Meta verification, POST for messages) | Disabled (public endpoint) |
 
 ### Shared Modules (`_shared/`)
 
@@ -146,7 +145,7 @@ Incoming Message
 - **Out-of-order protection** — stale messages rejected based on timestamp comparison
 - **Prompt injection filtering** — regex-based detection of common injection patterns, input sanitized
 - **Inactivity detection** — 24-hour threshold, user prompted to continue or start fresh
-- **Processing timeout** — 5-minute timeout on stuck sessions, auto-recovered by `process-queue`
+- **Processing timeout** — 5-minute timeout guard on stuck sessions to prevent long-held processing locks
 - **Interactive WhatsApp UI** — buttons (max 3), lists (max 10), formatted text with bold/italic
 - **Session persistence** — booking state carried across turns (symptoms → doctor → date → confirm)
 - **FAQ integration** — AI answers from FAQ knowledge base, rephrased naturally
@@ -218,7 +217,6 @@ make seed-faqs
 make deploy
 # Or individually:
 make deploy-webhook
-make deploy-process-queue
 ```
 
 ### 6. Push Secrets
@@ -248,14 +246,6 @@ npm run serve
 make serve
 ```
 
-Run the process-queue function locally:
-
-```bash
-npm run serve:process-queue
-# or
-make serve-process-queue
-```
-
 Test webhook verification:
 
 ```bash
@@ -263,25 +253,52 @@ curl "http://localhost:8000?hub.mode=subscribe&hub.challenge=test123&hub.verify_
 # Should return: test123
 ```
 
+## Docker (Local + Cloud)
+
+Build the container:
+
+```bash
+docker build -t whatsapp-webhook .
+```
+
+Run locally:
+
+```bash
+docker run --rm -p 8000:8000 --env-file .env whatsapp-webhook
+```
+
+Deploy on Render (Web Service):
+
+1. Push this repo to GitHub.
+2. Create a new Render Web Service from the repo.
+3. Use Docker deployment (Render auto-detects the `Dockerfile`).
+4. Add all required environment variables from `.env` in Render settings.
+5. Set your Meta callback URL to `https://<render-service>.onrender.com`.
+
+Deploy on AWS App Runner (container):
+
+1. Build and push image to ECR.
+2. Create an App Runner service from that ECR image.
+3. Add the same environment variables used in `.env`.
+4. Use the App Runner service URL as your Meta callback URL.
+
 ---
 
 ## Make Commands
 
-| Command                     | Description                                         |
-| --------------------------- | --------------------------------------------------- |
-| `make help`                 | Show all available commands                         |
-| `make install`              | Install Node.js dependencies                        |
-| `make seed`                 | Seed all CSV data into Supabase                     |
-| `make seed-doctors`         | Seed only doctors table                             |
-| `make seed-clinics`         | Seed only clinics table                             |
-| `make seed-medicines`       | Seed only medicines table                           |
-| `make seed-faqs`            | Seed only faqs table                                |
-| `make serve`                | Run webhook locally with Deno                       |
-| `make serve-process-queue`  | Run process-queue locally with Deno                 |
-| `make secrets`              | Push secrets from `.env` to Supabase edge functions |
-| `make deploy`               | Deploy all edge functions                           |
-| `make deploy-webhook`       | Deploy webhook only                                 |
-| `make deploy-process-queue` | Deploy process-queue only                           |
+| Command               | Description                                         |
+| --------------------- | --------------------------------------------------- |
+| `make help`           | Show all available commands                         |
+| `make install`        | Install Node.js dependencies                        |
+| `make seed`           | Seed all CSV data into Supabase                     |
+| `make seed-doctors`   | Seed only doctors table                             |
+| `make seed-clinics`   | Seed only clinics table                             |
+| `make seed-medicines` | Seed only medicines table                           |
+| `make seed-faqs`      | Seed only faqs table                                |
+| `make serve`          | Run webhook locally with Deno                       |
+| `make secrets`        | Push secrets from `.env` to Supabase edge functions |
+| `make deploy`         | Deploy all edge functions                           |
+| `make deploy-webhook` | Deploy webhook only                                 |
 
 ---
 
@@ -310,8 +327,6 @@ curl "http://localhost:8000?hub.mode=subscribe&hub.challenge=test123&hub.verify_
 │   └── functions/
 │       ├── webhook/
 │       │   └── index.ts          # Main webhook handler
-│       ├── process-queue/
-│       │   └── index.ts          # Orphan queue processor
 │       └── _shared/
 │           ├── supabase-client.ts
 │           ├── types.ts
